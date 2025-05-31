@@ -13,11 +13,9 @@ class CategoryPage extends StatefulWidget {
 
 class _CategoryPageState extends State<CategoryPage> {
   List categories = [];
-  final _formKey = GlobalKey<FormState>();
   String? name, description;
   int? editingId;
 
-  // Ganti dengan URL API Anda
   final String apiUrl = 'http://127.0.0.1:8000/api/categories';
 
   @override
@@ -38,36 +36,105 @@ class _CategoryPageState extends State<CategoryPage> {
     }
   }
 
-  Future<void> addOrUpdateCategory() async {
-    if (!_formKey.currentState!.validate()) return;
-    _formKey.currentState!.save();
+  Future<void> addOrUpdateCategory({bool isEdit = false}) async {
+    final formKey = GlobalKey<FormState>();
+    String? tempName = isEdit ? name : null;
+    String? tempDesc = isEdit ? description : null;
 
-    final url = editingId == null
-        ? apiUrl
-        : '$apiUrl/$editingId';
-    final method = editingId == null ? http.post : http.put;
-
-    final response = await method(
-      Uri.parse(url),
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ${widget.token}',
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF23234B),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(
+            isEdit ? 'Edit Kategori' : 'Tambah Kategori',
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  initialValue: tempName,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(
+                    labelText: 'Nama Kategori',
+                    labelStyle: TextStyle(color: Colors.white),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: Colors.white54),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: Colors.white),
+                    ),
+                  ),
+                  validator: (v) => v == null || v.isEmpty ? 'Wajib diisi' : null,
+                  onChanged: (v) => tempName = v,
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  initialValue: tempDesc,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(
+                    labelText: 'Deskripsi',
+                    labelStyle: TextStyle(color: Colors.white),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: Colors.white54),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: Colors.white),
+                    ),
+                  ),
+                  onChanged: (v) => tempDesc = v,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              child: const Text('Batal', style: TextStyle(color: Colors.white70)),
+              onPressed: () => Navigator.pop(context),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.deepPurple,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: Text(isEdit ? 'Update' : 'Tambah'),
+              onPressed: () async {
+                if (formKey.currentState!.validate()) {
+                  Navigator.pop(context);
+                  final url = isEdit ? '$apiUrl/$editingId' : apiUrl;
+                  final method = isEdit ? http.put : http.post;
+                  final response = await method(
+                    Uri.parse(url),
+                    headers: {
+                      'Accept': 'application/json',
+                      'Content-Type': 'application/json',
+                      'Authorization': 'Bearer ${widget.token}',
+                    },
+                    body: json.encode({
+                      'name': tempName,
+                      'description': tempDesc,
+                    }),
+                  );
+                  if (response.statusCode == 201 || response.statusCode == 200) {
+                    fetchCategories();
+                    setState(() {
+                      editingId = null;
+                      name = null;
+                      description = null;
+                    });
+                  }
+                }
+              },
+            ),
+          ],
+        );
       },
-      body: json.encode({
-        'name': name,
-        'description': description,
-      }),
     );
-    if (response.statusCode == 201 || response.statusCode == 200) {
-      fetchCategories();
-      setState(() {
-        editingId = null;
-        name = null;
-        description = null;
-      });
-      _formKey.currentState!.reset();
-    }
   }
 
   Future<void> deleteCategory(int id) async {
@@ -89,72 +156,43 @@ class _CategoryPageState extends State<CategoryPage> {
       name = category['name'];
       description = category['description'];
     });
+    addOrUpdateCategory(isEdit: true);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Kategori')),
+      backgroundColor: const Color(0xFF181829),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: Colors.deepPurple,
+        child: const Icon(Icons.add, color: Colors.white),
+        onPressed: () => addOrUpdateCategory(),
+      ),
       body: Column(
         children: [
-          Form(
-            key: _formKey,
-            child: Padding(
-              padding: EdgeInsets.all(8),
-              child: Column(
-                children: [
-                  TextFormField(
-                    initialValue: name,
-                    decoration: InputDecoration(labelText: 'Nama Kategori'),
-                    validator: (v) => v == null || v.isEmpty ? 'Wajib diisi' : null,
-                    onSaved: (v) => name = v,
-                  ),
-                  TextFormField(
-                    initialValue: description,
-                    decoration: InputDecoration(labelText: 'Deskripsi'),
-                    onSaved: (v) => description = v,
-                  ),
-                  Row(
-                    children: [
-                      ElevatedButton(
-                        onPressed: addOrUpdateCategory,
-                        child: Text(editingId == null ? 'Tambah' : 'Update'),
-                      ),
-                      if (editingId != null)
-                        TextButton(
-                          onPressed: () {
-                            setState(() {
-                              editingId = null;
-                              name = null;
-                              description = null;
-                            });
-                            _formKey.currentState!.reset();
-                          },
-                          child: Text('Batal'),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
           Expanded(
             child: ListView.builder(
               itemCount: categories.length,
               itemBuilder: (context, i) {
                 final cat = categories[i];
                 return ListTile(
-                  title: Text(cat['name']),
-                  subtitle: Text(cat['description'] ?? ''),
+                  title: Text(
+                    cat['name'],
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: Text(
+                    cat['description'] ?? '',
+                    style: const TextStyle(color: Colors.white70),
+                  ),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       IconButton(
-                        icon: Icon(Icons.edit),
+                        icon: const Icon(Icons.edit, color: Colors.amber),
                         onPressed: () => startEdit(cat),
                       ),
                       IconButton(
-                        icon: Icon(Icons.delete),
+                        icon: const Icon(Icons.delete, color: Colors.redAccent),
                         onPressed: () => deleteCategory(cat['id']),
                       ),
                     ],
